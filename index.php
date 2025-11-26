@@ -6,6 +6,7 @@
 
 $stateFile = 'ticket_state.txt';
 $currentDate = date('Y-m-d'); // Current date in YYYY-MM-DD format
+$currentTime = date('h:i:s A'); // Current time for the receipt timestamp
 
 // Default state if the file doesn't exist or is corrupt
 $ticketNumber = 0;
@@ -81,25 +82,48 @@ $displayNumber = sprintf('%02d', $ticketNumber);
             print-color-adjust: exact;
             -webkit-print-color-adjust: exact;
         }
+
+        /* Class to hide elements on screen but show them in print */
+        .print-only {
+            display: none;
+        }
+
         /* Hide buttons and unnecessary elements when printing the ticket */
         @media print {
+            /* Set the page size for a standard 80mm thermal receipt */
+            @page {
+                size: 80mm auto; /* Set paper width to 80mm, height auto */
+                margin: 0; /* Remove all default print margins */
+            }
             body {
+                width: 80mm; /* Force body width to match the paper */
+                padding: 0;
+                margin: 0;
                 justify-content: flex-start;
                 background-color: #fff !important;
             }
             .no-print {
                 display: none !important;
             }
+            .print-only {
+                display: block !important;
+                text-align: center !important; 
+            }
+            /* Style the ticket card to look like a receipt strip */
             .ticket-card {
                 box-shadow: none !important;
-                border: 2px dashed #000;
-                padding: 1rem;
-                max-width: 300px;
-                margin: 0 auto;
+                border: none; /* No border for the receipt */
+                width: 100%; /* Take full 80mm width */
+                max-width: none;
+                padding: 0.5rem 0.2rem; /* Minimal internal padding */
+                margin: 0;
+                font-size: 10pt; /* Smaller base font for receipt print */
             }
             .ticket-number-display {
-                font-size: 4rem;
+                font-size: 50pt; /* Huge font for the number on the receipt */
+                font-weight: 900;
                 color: #000;
+                margin: 0.5rem 0;
             }
         }
     </style>
@@ -112,42 +136,69 @@ $displayNumber = sprintf('%02d', $ticketNumber);
     </header>
 
     <div class="ticket-card">
-        <h2 class="text-xl font-semibold text-gray-600 mb-2">Your Ticket Number Is:</h2>
+        
+        <!-- PRINT ONLY Header -->
+        <div class="print-only text-xs font-bold mb-2 pt-2">
+            *** Chromaesthetics Inc ***<br>
+            GRWM Cosmetics
+        </div>
+
+        <h2 class="text-xl font-semibold text-gray-600 mb-2 no-print">Current Ticket to Issue:</h2>
         
         <!-- The dynamically generated and formatted ticket number -->
         <div id="ticketNumber" class="ticket-number-display select-none">
             <?php echo htmlspecialchars($displayNumber); ?>
         </div>
+        
+        <!-- Print-only instructions for the ticket recipient -->
+        <div class="print-only text-sm font-semibold mb-2">
+            YOUR QUEUE NUMBER
+        </div>
 
-        <p class="text-sm text-gray-500 mb-4">
+        <!-- Date/Time displayed on screen (non-print) -->
+        <p class="text-sm text-gray-500 mb-4 no-print">
             Today's Date: <?php echo date('F j, Y'); ?>
         </p>
 
-        <!-- Button to generate the next number (reloads the page, triggering the PHP logic) -->
-        <!-- NOTE: This button generates the *next* number and should be pressed by staff or upon customer request for a new ticket. -->
-        <a href="index.php" class="no-print w-full btn btn-lg text-white font-bold py-3 mb-3 rounded-xl transition duration-150" 
-           style="background-color: #d15a77; border-color: #d15a77;">
-            Next Ticket (Generates <?php echo sprintf('%02d', $ticketNumber + 1); ?>)
-        </a>
+        <!-- Time and Date for Print -->
+        <div class="print-only text-center text-xs mb-3 border-t border-b border-gray-400 py-1">
+            Date: <?php echo date('Y/m/d'); ?> | Time: <?php echo htmlspecialchars($currentTime); ?>
+        </div>
 
-        <!-- Button for printing -->
-        <button onclick="printTicket()" class="no-print w-full btn btn-lg btn-outline-secondary font-bold py-3 rounded-xl transition duration-150">
+        <!-- Consolidated Button: This prints the current number, then reloads the page to generate the next one. -->
+        <button onclick="printAndIssueNext()" class="no-print w-full btn btn-lg text-white font-bold py-3 rounded-xl transition duration-150" 
+           style="background-color: #d15a77; border-color: #d15a77;">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block w-5 h-5 me-2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-            Print Ticket
+            Print & Issue Next Ticket
         </button>
 
-        <small class="no-print mt-3 block text-gray-400">Current stored ticket number: <?php echo htmlspecialchars($displayNumber); ?></small>
+        <small class="no-print mt-3 block text-gray-400">
+            Clicking this will print ticket **<?php echo htmlspecialchars($displayNumber); ?>** and then prepare ticket **<?php echo sprintf('%02d', $ticketNumber + 1); ?>**.
+        </small>
+        
+        <!-- PRINT ONLY Footer -->
+        <div class="print-only text-center text-xs mt-3 pb-2">
+            *** Thank you for waiting! ***
+        </div>
+
     </div>
 
     <script>
         /**
-         * The print function uses the standard browser printing mechanism.
-         * The operating system (Windows, macOS, Android, etc.) handles connecting to the printer,
-         * including Bluetooth and portable receipt printers.
+         * The combined print and issue function.
+         * 1. Triggers the print dialog for the CURRENTLY displayed number.
+         * 2. After a short delay, reloads the page, which triggers the PHP script
+         * to calculate and display the next number.
          */
-        function printTicket() {
-            // This triggers the native browser print dialog
+        function printAndIssueNext() {
+            // 1. Trigger the native browser print dialog for the current ticket
             window.print();
+
+            // 2. Delay the reload slightly (500ms) to ensure the print dialog opens before the page changes.
+            // This reload triggers the PHP code to increment the number for the next client.
+            setTimeout(function() {
+                window.location.href = 'index.php';
+            }, 500);
         }
     </script>
     <!-- Bootstrap JS (optional, for button effects) -->
